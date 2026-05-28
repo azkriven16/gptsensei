@@ -382,15 +382,19 @@ export default function App() {
         attachmentData: m.attachmentData,
       }));
 
+      const requestPayload = {
+        messages: proxyPayload,
+        webSearch: webSearch,
+      };
+
       const apiResponse = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: proxyPayload,
-          webSearch: webSearch,
-          stream: false,
+          ...requestPayload,
+          stream: true,
         }),
       });
 
@@ -399,17 +403,13 @@ export default function App() {
         throw new Error(errorData.error || 'The server encountered an error compiling a response.');
       }
 
-      const responseData = await apiResponse.json();
-      if (responseData.error) {
-        throw new Error(responseData.error);
-      }
-
+      // Add a placeholder message for the assistant stream instantly
+      const assistantMessageId = `msg_${Date.now() + 1}`;
       const assistantMessage: Message = {
-        id: `msg_${Date.now() + 1}`,
+        id: assistantMessageId,
         role: 'assistant',
-        content: responseData.content || 'I could not generate a response. Please try again.',
+        content: '',
         createdAt: new Date().toISOString(),
-        searchSources: responseData.searchSources,
       };
 
       setChats(prev => prev.map(chat => {
@@ -418,6 +418,108 @@ export default function App() {
         }
         return chat;
       }));
+
+      const reader = apiResponse.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+      if (!reader) {
+        throw new Error('Unable to initialize response stream reader.');
+      }
+
+      let accumulatedContent = '';
+      let accumulatedSources: any[] = [];
+      let buffer = '';
+
+      const updateAssistantMessage = (content: string, searchSources?: any[]) => {
+        setChats(prev => prev.map(chat => {
+          if (chat.id === currentChatId) {
+            return {
+              ...chat,
+              messages: chat.messages.map(m => {
+                if (m.id === assistantMessageId) {
+                  return {
+                    ...m,
+                    content,
+                    searchSources: searchSources && searchSources.length > 0 ? searchSources : undefined,
+                  };
+                }
+                return m;
+              }),
+            };
+          }
+          return chat;
+        }));
+      };
+
+      const handleStreamLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') return;
+        if (!trimmed.startsWith('data: ')) return;
+
+        let payload: any;
+        try {
+          payload = JSON.parse(trimmed.slice(6));
+        } catch {
+          return;
+        }
+
+        if (payload.error) {
+          throw new Error(payload.error);
+        }
+
+        if (payload.text) {
+          accumulatedContent += payload.text;
+        }
+        if (payload.searchSources) {
+          accumulatedSources = payload.searchSources;
+        }
+
+        updateAssistantMessage(accumulatedContent, accumulatedSources);
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          handleStreamLine(line);
+        }
+      }
+
+      if (buffer.trim()) {
+        handleStreamLine(buffer);
+      }
+
+      if (!accumulatedContent.trim()) {
+        const retryResponse = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...requestPayload,
+            stream: false,
+          }),
+        });
+
+        if (!retryResponse.ok) {
+          const errorData = await retryResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || 'The fallback request failed.');
+        }
+
+        const responseData = await retryResponse.json();
+        if (responseData.error) {
+          throw new Error(responseData.error);
+        }
+
+        updateAssistantMessage(
+          responseData.content || 'I could not generate a response. Please try again.',
+          responseData.searchSources
+        );
+      }
 
     } catch (err: any) {
       console.error('Failed to query assistant:', err);

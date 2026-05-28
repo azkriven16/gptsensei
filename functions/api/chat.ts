@@ -58,44 +58,60 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
 
     if (stream) {
       const encoder = new TextEncoder();
-      const readable = new ReadableStream({
-        async start(controller) {
-          try {
-            const aiResponseStream = await generateContentStreamWithFallback(ai, params);
-            const searchSources: any[] = [];
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
 
-            for await (const chunk of aiResponseStream) {
-              const text = chunk.text || "";
-              const chunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      const writeEvent = async (payload: unknown) => {
+        await writer.write(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+      };
 
-              if (chunks && Array.isArray(chunks)) {
-                chunks.forEach((c: any) => {
-                  if (c.web && c.web.uri && c.web.title && !searchSources.some((s: any) => s.uri === c.web.uri)) {
-                    searchSources.push({
-                      title: c.web.title,
-                      uri: c.web.uri,
-                    });
-                  }
-                });
-              }
+      const streamResponse = async () => {
+        try {
+          const aiResponseStream = await generateContentStreamWithFallback(ai, params);
+          const searchSources: any[] = [];
+          let emittedText = false;
 
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-                text,
-                searchSources: searchSources.length > 0 ? searchSources : undefined,
-              })}\n\n`));
+          for await (const chunk of aiResponseStream) {
+            const text = chunk.text || "";
+            const chunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+
+            if (chunks && Array.isArray(chunks)) {
+              chunks.forEach((c: any) => {
+                if (c.web && c.web.uri && c.web.title && !searchSources.some((s: any) => s.uri === c.web.uri)) {
+                  searchSources.push({
+                    title: c.web.title,
+                    uri: c.web.uri,
+                  });
+                }
+              });
             }
 
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          } catch (error: any) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-              error: error.message || "An internal error occurred during generation request.",
-            })}\n\n`));
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          } finally {
-            controller.close();
+            if (text) {
+              emittedText = true;
+            }
+
+            await writeEvent({
+              text,
+              searchSources: searchSources.length > 0 ? searchSources : undefined,
+            });
           }
-        },
-      });
+
+          if (!emittedText) {
+            await writeEvent({ warning: "Gemini stream completed without text." });
+          }
+
+          await writer.write(encoder.encode("data: [DONE]\n\n"));
+        } catch (error: any) {
+          await writeEvent({
+            error: error.message || "An internal error occurred during generation request.",
+          });
+          await writer.write(encoder.encode("data: [DONE]\n\n"));
+        } finally {
+          await writer.close();
+        }
+      };
+
+      void streamResponse();
 
       return new Response(readable, {
         headers: {
