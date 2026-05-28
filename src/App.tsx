@@ -390,7 +390,7 @@ export default function App() {
         body: JSON.stringify({
           messages: proxyPayload,
           webSearch: webSearch,
-          stream: true, // Request SSE streaming
+          stream: false,
         }),
       });
 
@@ -399,13 +399,17 @@ export default function App() {
         throw new Error(errorData.error || 'The server encountered an error compiling a response.');
       }
 
-      // Add a placeholder message for the assistant stream instantly
-      const assistantMessageId = `msg_${Date.now() + 1}`;
+      const responseData = await apiResponse.json();
+      if (responseData.error) {
+        throw new Error(responseData.error);
+      }
+
       const assistantMessage: Message = {
-        id: assistantMessageId,
+        id: `msg_${Date.now() + 1}`,
         role: 'assistant',
-        content: '',
+        content: responseData.content || 'I could not generate a response. Please try again.',
         createdAt: new Date().toISOString(),
+        searchSources: responseData.searchSources,
       };
 
       setChats(prev => prev.map(chat => {
@@ -414,75 +418,6 @@ export default function App() {
         }
         return chat;
       }));
-
-      // Set up the stream reader
-      const reader = apiResponse.body?.getReader();
-      const decoder = new TextDecoder('utf-8');
-      if (!reader) {
-        throw new Error('Unable to initialize response stream reader.');
-      }
-
-      let accumulatedContent = '';
-      let accumulatedSources: any[] = [];
-      let buffer = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          if (trimmed === 'data: [DONE]') continue;
-
-          if (trimmed.startsWith('data: ')) {
-            try {
-              const payload = JSON.parse(trimmed.slice(6));
-
-              if (payload.error) {
-                throw new Error(payload.error);
-              }
-              
-              if (payload.text) {
-                accumulatedContent += payload.text;
-              }
-              if (payload.searchSources) {
-                accumulatedSources = payload.searchSources;
-              }
-
-              // Direct real-time updates to the relevant chat state
-              setChats(prev => prev.map(chat => {
-                if (chat.id === currentChatId) {
-                  return {
-                    ...chat,
-                    messages: chat.messages.map(m => {
-                      if (m.id === assistantMessageId) {
-                        return {
-                          ...m,
-                          content: accumulatedContent,
-                          searchSources: accumulatedSources.length > 0 ? accumulatedSources : undefined,
-                        };
-                      }
-                      return m;
-                    }),
-                  };
-                }
-                return chat;
-              }));
-            } catch (jsonErr) {
-              // Ignore partial JSON chunks during live decoding
-            }
-          }
-        }
-      }
-
-      if (!accumulatedContent.trim()) {
-        throw new Error('The server returned an empty response stream.');
-      }
 
     } catch (err: any) {
       console.error('Failed to query assistant:', err);
