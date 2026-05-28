@@ -1,0 +1,6 @@
+{
+  "name": "Manga & Manhwa AI Recommender",
+  "description": "An AI-powered recommender custom-tailored for Manga, Manhwa, and Manhua lovers. Explore personalized, curated suggestions from AniList and MangaDex, filtered by genres, art styles, moods, and direct chat interactions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
