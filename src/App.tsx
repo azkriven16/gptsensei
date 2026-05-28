@@ -483,7 +483,7 @@ export default function App() {
       const fallbackErrorMessage: Message = {
         id: `msg_${Date.now() + 2}`,
         role: 'assistant',
-        content: `### ❌ Query Failed\n\nI was unable to complete this query because your **GEMINI_API_KEY** secret is missing, inactive, or rate-limited.\n\n**To set up your API key:**\n1. Select the **Secrets panel** in the **Settings menu** of standard AI Studio.\n2. Bind your key safely as \`GEMINI_API_KEY\`.\n3. Retry sending your message!\n\n*(Technical error info: ${err.message || 'Server timeout'})*`,
+        content: `### Query failed\n\nGPT Senpai could not reach Gemini because **GEMINI_API_KEY** is missing, inactive, or rate-limited.\n\nFor local dev, check that .env.local contains GEMINI_API_KEY and restart the dev server.\n\nFor Cloudflare Pages, add GEMINI_API_KEY in the Pages project's Production environment variables, then redeploy.\n\nTechnical detail: ${err.message || 'Server timeout'}`,
         createdAt: new Date().toISOString(),
         isError: true,
       };

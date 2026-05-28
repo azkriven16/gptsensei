@@ -128,6 +128,7 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
 
   const renderMangaDeck = (isBottom = false) => {
     if (isUser) return null;
+    if (message.isError) return null;
     if (detectedTitles.length === 0) return null;
 
     return (
@@ -262,6 +263,10 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
   // Synchronous, immediate title parser for instant streaming skeletons
   useEffect(() => {
     if (isUser) return;
+    if (message.isError) {
+      setDetectedTitles([]);
+      return;
+    }
     if (!message.content) return;
 
     const lines = message.content.split('\n');
@@ -289,18 +294,19 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
     if (parsed.length !== detectedTitles.length || !parsed.every((val, i) => val === detectedTitles[i])) {
       setDetectedTitles(parsed);
     }
-  }, [message.content, isUser]);
+  }, [message.content, isUser, message.isError]);
 
   // Handle live parsing & on-the-fly search enrichment for recommended names
   useEffect(() => {
     if (isUser) return;
+    if (message.isError) return;
     
     const timer = setTimeout(() => {
       extractAndEnrichManga();
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [message.content, isUser]);
+  }, [message.content, isUser, message.isError]);
 
   const extractAndEnrichManga = async () => {
     if (!message.content) return;
