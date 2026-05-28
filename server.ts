@@ -40,10 +40,10 @@ async function startServer() {
 
   // Model Fallback chain helper to handle transient 503 limits dynamically
   const MODEL_FALLBACK_CHAIN = [
-    "models/gemini-2.5-flash",
-    "models/gemini-3.5-flash",
-    "models/gemini-2.0-flash",
-    "models/gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-3.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
   ];
 
   async function generateContentWithFallback(ai: GoogleGenAI, params: any) {

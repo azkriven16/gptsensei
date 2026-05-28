@@ -5,11 +5,16 @@ export interface Env {
 }
 
 export const MODEL_FALLBACK_CHAIN = [
-  "models/gemini-2.5-flash",
-  "models/gemini-3.5-flash",
-  "models/gemini-2.0-flash",
-  "models/gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-3.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.5-flash-lite",
 ];
+
+function describeGeminiError(error: any, modelName: string) {
+  const message = String(error?.message || error || "");
+  return `${modelName}: ${message}`;
+}
 
 export function getGeminiClient(env: Env) {
   if (!env.GEMINI_API_KEY) {
@@ -27,7 +32,7 @@ export function getGeminiClient(env: Env) {
 }
 
 export async function generateContentWithFallback(ai: GoogleGenAI, params: any) {
-  let lastError: any = null;
+  const errors: string[] = [];
 
   for (const modelName of MODEL_FALLBACK_CHAIN) {
     try {
@@ -36,7 +41,7 @@ export async function generateContentWithFallback(ai: GoogleGenAI, params: any) 
         model: modelName,
       });
     } catch (err: any) {
-      lastError = err;
+      errors.push(describeGeminiError(err, modelName));
       const errMsg = String(err.message || "").toLowerCase();
       if (errMsg.includes("api_key") || errMsg.includes("invalid") || errMsg.includes("key is required")) {
         throw err;
@@ -44,11 +49,11 @@ export async function generateContentWithFallback(ai: GoogleGenAI, params: any) 
     }
   }
 
-  throw lastError;
+  throw new Error(`All Gemini fallback models failed. ${errors.join(" | ")}`);
 }
 
 export async function generateContentStreamWithFallback(ai: GoogleGenAI, params: any) {
-  let lastError: any = null;
+  const errors: string[] = [];
 
   for (const modelName of MODEL_FALLBACK_CHAIN) {
     try {
@@ -57,7 +62,7 @@ export async function generateContentStreamWithFallback(ai: GoogleGenAI, params:
         model: modelName,
       });
     } catch (err: any) {
-      lastError = err;
+      errors.push(describeGeminiError(err, modelName));
       const errMsg = String(err.message || "").toLowerCase();
       if (errMsg.includes("api_key") || errMsg.includes("invalid") || errMsg.includes("key is required")) {
         throw err;
@@ -65,7 +70,7 @@ export async function generateContentStreamWithFallback(ai: GoogleGenAI, params:
     }
   }
 
-  throw lastError;
+  throw new Error(`All Gemini fallback stream models failed. ${errors.join(" | ")}`);
 }
 
 export function jsonResponse(body: unknown, status = 200) {

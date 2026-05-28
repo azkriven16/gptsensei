@@ -14,6 +14,25 @@ import { Chat, Message, DesignSettings, DEFAULT_DESIGN_SETTINGS } from './types'
 
 const ENABLE_LIMIT_FALLBACK_TEST = false;
 
+function getAssistantErrorContent(error: any) {
+  const detail = error?.message || 'Server timeout';
+  const lowerDetail = String(detail).toLowerCase();
+
+  if (lowerDetail.includes('api_key') || lowerDetail.includes('gemini_api_key') || lowerDetail.includes('key is required')) {
+    return `### Gemini key is not available\n\nGPT Senpai could not reach Gemini because **GEMINI_API_KEY** is missing or invalid.\n\nFor local dev, check that .env.local contains GEMINI_API_KEY and restart the dev server.\n\nFor Cloudflare Pages, add GEMINI_API_KEY in the Pages project's Production environment variables, then redeploy.\n\nTechnical detail: ${detail}`;
+  }
+
+  if (lowerDetail.includes('not found') || lowerDetail.includes('fallback models failed') || lowerDetail.includes('generatecontent')) {
+    return `### Gemini model issue\n\nGPT Senpai reached Gemini, but the configured model is not available for this API key or API version.\n\nCheck /api/health on the deployed site to confirm the active model list and whether Cloudflare can see the Gemini key.\n\nTechnical detail: ${detail}`;
+  }
+
+  if (lowerDetail.includes('rate') || lowerDetail.includes('quota') || lowerDetail.includes('429')) {
+    return `### Gemini limit reached\n\nGemini returned a quota or rate-limit error. Wait a moment, then retry.\n\nTechnical detail: ${detail}`;
+  }
+
+  return `### Query failed\n\nGPT Senpai could not complete the request.\n\nTechnical detail: ${detail}`;
+}
+
 export default function App() {
   // Sync core chat states from LocalStorage for seamless sessions caching
   const [chats, setChats] = useState<Chat[]>(() => {
@@ -528,7 +547,7 @@ export default function App() {
       const fallbackErrorMessage: Message = {
         id: `msg_${Date.now() + 2}`,
         role: 'assistant',
-        content: `### Query failed\n\nGPT Senpai could not reach Gemini because **GEMINI_API_KEY** is missing, inactive, or rate-limited.\n\nFor local dev, check that .env.local contains GEMINI_API_KEY and restart the dev server.\n\nFor Cloudflare Pages, add GEMINI_API_KEY in the Pages project's Production environment variables, then redeploy.\n\nTechnical detail: ${err.message || 'Server timeout'}`,
+        content: getAssistantErrorContent(err),
         createdAt: new Date().toISOString(),
         isError: true,
       };
