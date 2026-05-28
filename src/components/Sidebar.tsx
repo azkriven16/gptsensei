@@ -314,6 +314,17 @@ export default function Sidebar({
                 )}
               </div>
 
+              {chats.length > 0 && (
+                <button
+                  id="clear-all-chats-btn"
+                  onClick={onClearHistory}
+                  className="flex-shrink-0 w-full flex items-center justify-center gap-2 py-2 mb-2.5 text-xs text-white/40 hover:text-rose-400 hover:bg-[#2f2f2f]/30 border border-white/5 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear conversations</span>
+                </button>
+              )}
+
               {/* AniList Database panel replaces the removed personality selector */}
               <div className="flex-shrink-0 h-[500px] max-h-[62vh] overflow-hidden border border-white/5 rounded-xl bg-black/15" id="sidebar-anilist-panel">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-black/20">
@@ -329,19 +340,8 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Bottom utility capsule: user profile, settings trigger, clear history option */}
+      {/* Bottom utility capsule: user profile and settings trigger */}
       <div className="border-t border-white/5 p-3 flex flex-col gap-2 bg-[#171717]">
-        {chats.length > 0 && (
-          <button
-            id="clear-all-chats-btn"
-            onClick={onClearHistory}
-            className="w-full flex items-center justify-center gap-2 py-2 text-xs text-white/40 hover:text-rose-400 hover:bg-[#2f2f2f]/30 rounded-lg transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear conversations</span>
-          </button>
-        )}
-        
         <div id="user-footer-capsule" className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-[#2f2f2f] transition-all duration-150 text-white cursor-pointer">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs select-none shadow-sm flex-shrink-0">
