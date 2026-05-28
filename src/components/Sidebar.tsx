@@ -212,20 +212,8 @@ export default function Sidebar({
                 <Plus className="w-3.5 h-3.5 text-white/40" />
               </button>
 
-              {/* AniList Database panel replaces the removed personality selector */}
-              <div className="flex-shrink-0 h-[500px] max-h-[62vh] overflow-hidden border border-white/5 rounded-xl bg-black/15 mb-2.5" id="sidebar-anilist-panel">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-black/20">
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="w-3.5 h-3.5 text-amber-500" />
-                    <span className="text-[10px] font-bold text-white/45 uppercase tracking-wider">AniList Database</span>
-                  </div>
-                  <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-500 px-1.5 py-0.2 rounded font-bold tracking-wider">Search</span>
-                </div>
-                <MangaExplorer onAskAIAboutManga={onAskAIAboutManga} />
-              </div>
-
               {/* Scrollable history lists grouped by time frames */}
-              <div className="flex-grow overflow-y-auto pr-0.5 space-y-5 scrollbar-thin">
+              <div className="flex-grow overflow-y-auto pr-0.5 space-y-5 scrollbar-thin mb-2.5">
                 {chats.length === 0 ? (
                   <div className="h-24 flex flex-col items-center justify-center text-center px-4">
                     <MessageSquare className="w-6 h-6 text-white/10 mb-1.5" />
@@ -324,6 +312,18 @@ export default function Sidebar({
                     </div>
                   ))
                 )}
+              </div>
+
+              {/* AniList Database panel replaces the removed personality selector */}
+              <div className="flex-shrink-0 h-[500px] max-h-[62vh] overflow-hidden border border-white/5 rounded-xl bg-black/15" id="sidebar-anilist-panel">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-black/20">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="text-[10px] font-bold text-white/45 uppercase tracking-wider">AniList Database</span>
+                  </div>
+                  <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-500 px-1.5 py-0.2 rounded font-bold tracking-wider">Search</span>
+                </div>
+                <MangaExplorer onAskAIAboutManga={onAskAIAboutManga} />
               </div>
           </div>
         </div>
