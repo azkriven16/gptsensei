@@ -442,6 +442,10 @@ export default function App() {
           if (trimmed.startsWith('data: ')) {
             try {
               const payload = JSON.parse(trimmed.slice(6));
+
+              if (payload.error) {
+                throw new Error(payload.error);
+              }
               
               if (payload.text) {
                 accumulatedContent += payload.text;
@@ -474,6 +478,10 @@ export default function App() {
             }
           }
         }
+      }
+
+      if (!accumulatedContent.trim()) {
+        throw new Error('The server returned an empty response stream.');
       }
 
     } catch (err: any) {
