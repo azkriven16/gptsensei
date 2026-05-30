@@ -1,0 +1,7 @@
+name = "gptsensei-gemini-proxy"
+main = "worker.ts"
+compatibility_date = "2026-05-28"
+
+[placement]
+mode = "targeted"
+region = "gcp:us-east4"
