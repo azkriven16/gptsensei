@@ -22,12 +22,16 @@ function getAssistantErrorContent(error: any) {
     return `### Gemini key is not available\n\nGPT Senpai could not reach Gemini because **GEMINI_API_KEY** is missing or invalid.\n\nFor local dev, check that .env.local contains GEMINI_API_KEY and restart the dev server.\n\nFor Cloudflare Pages, add GEMINI_API_KEY in the Pages project's Production environment variables, then redeploy.\n\nTechnical detail: ${detail}`;
   }
 
-  if (lowerDetail.includes('not found') || lowerDetail.includes('fallback models failed') || lowerDetail.includes('generatecontent')) {
-    return `### Gemini model issue\n\nGPT Senpai reached Gemini, but the configured model is not available for this API key or API version.\n\nCheck /api/health on the deployed site to confirm the active model list and whether Cloudflare can see the Gemini key.\n\nTechnical detail: ${detail}`;
+  if (lowerDetail.includes('user location is not supported') || lowerDetail.includes('failed_precondition')) {
+    return `### Gemini location blocked\n\nGPT Senpai reached Gemini, but Gemini rejected the request from the deployed runtime location.\n\nOpen /api/health on the deployed site and check the Cloudflare location plus Gemini model lookup. If the model lookup also fails with this message, move the Gemini call to a supported backend region or use Vertex AI from a supported Google Cloud region.\n\nTechnical detail: ${detail}`;
   }
 
-  if (lowerDetail.includes('rate') || lowerDetail.includes('quota') || lowerDetail.includes('429')) {
-    return `### Gemini limit reached\n\nGemini returned a quota or rate-limit error. Wait a moment, then retry.\n\nTechnical detail: ${detail}`;
+  if (lowerDetail.includes('rate') || lowerDetail.includes('quota') || lowerDetail.includes('429') || lowerDetail.includes('resource_exhausted')) {
+    return `### Gemini limit reached\n\nGemini returned a quota or rate-limit error. Wait a moment, then retry, or switch the deployment to a Gemini key/project with quota for the configured model.\n\nTechnical detail: ${detail}`;
+  }
+
+  if (lowerDetail.includes('not found') || lowerDetail.includes('fallback models failed') || lowerDetail.includes('generatecontent')) {
+    return `### Gemini model issue\n\nGPT Senpai reached Gemini, but the configured model is not available for this API key or API version.\n\nCheck /api/health on the deployed site to confirm the active model list and whether Cloudflare can see the Gemini key.\n\nTechnical detail: ${detail}`;
   }
 
   return `### Query failed\n\nGPT Senpai could not complete the request.\n\nTechnical detail: ${detail}`;

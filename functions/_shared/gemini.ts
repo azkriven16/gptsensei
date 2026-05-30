@@ -16,6 +16,10 @@ function describeGeminiError(error: any, modelName: string) {
   return `${modelName}: ${message}`;
 }
 
+export function getGeminiErrorMessage(error: any) {
+  return String(error?.message || error || "");
+}
+
 export function getGeminiClient(env: Env) {
   if (!env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY environment variable is required.");
@@ -71,6 +75,29 @@ export async function generateContentStreamWithFallback(ai: GoogleGenAI, params:
   }
 
   throw new Error(`All Gemini fallback stream models failed. ${errors.join(" | ")}`);
+}
+
+export async function listGenerateContentModels(ai: GoogleGenAI) {
+  const pager = await ai.models.list();
+  const models: Array<{
+    name: string;
+    displayName?: string;
+    supportedActions: string[];
+  }> = [];
+
+  for await (const model of pager as any) {
+    const supportedActions = model.supportedActions || model.supportedMethods || [];
+
+    if (supportedActions.includes("generateContent")) {
+      models.push({
+        name: model.name,
+        displayName: model.displayName,
+        supportedActions,
+      });
+    }
+  }
+
+  return models;
 }
 
 export function jsonResponse(body: unknown, status = 200) {
