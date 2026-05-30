@@ -3,4 +3,5 @@ compatibility_date = "2026-05-28"
 pages_build_output_dir = "dist"
 
 [placement]
-mode = "smart"
+mode = "targeted"
+region = "gcp:us-east4"
