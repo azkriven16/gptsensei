@@ -3,11 +3,57 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import MessageItem from './MessageItem';
 import SuggestionCards from './SuggestionCards';
 import { Message } from '../types';
+
+const INITIAL_LOADING_MESSAGE = 'Thinking...';
+
+const LOADING_MESSAGE_POOL = [
+  'Peeking behind the shrine gates ⛩️',
+  'Dusting off the hidden shelf 🌸',
+  'Aligning genre chakras ☯',
+  'Rolling the recommendation gacha 🍥',
+  'Slurping lore noodles 🍜',
+  'Sharpening the black swordsman radar 𒉭',
+  'Trying not to overhype it (,,>﹏<,,)',
+  'Asking the manga spirits nicely 👉👈',
+  'Sniffing out peak panels ≽^•⩊•^≼',
+  'Staring respectfully at the shortlist ≽ ^⎚ ˕ ⎚^ ≼',
+  'Checking if the first arc actually cooks 🍜',
+  'Looking for the secret good stuff ⛩️',
+  'Purifying weak matches ☯',
+  'Tuning the vibe dial 🌸',
+  'Comparing aura levels 🍥',
+  'Opening the forbidden rec notebook 𒉭',
+  'Negotiating with the trope council 👉👈',
+  'Testing for binge-read danger ≽^•⩊•^≼',
+  'Summoning clean art and big moments ⛩️',
+  'Reading between suspicious panels 🌸',
+  'Weighing premise against payoff ☯',
+  'Cooking up the next obsession 🍜',
+  'Checking caveats with tiny courage (,,>﹏<,,)',
+  'Matching your tolerance for chaos 🍥',
+  'Separating hype from actual sauce 𒉭',
+  'Consulting the hidden-world committee 👉👈',
+  'Measuring supernatural density ≽ ^⎚ ˕ ⎚^ ≼',
+  'Finding the safest entry point ⛩️',
+  'Polishing the pitch until it sparkles 🌸',
+  'Making this list earn its ramen 🍜',
+];
+
+function shuffleLoadingMessages() {
+  const messages = [...LOADING_MESSAGE_POOL];
+
+  for (let index = messages.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [messages[index], messages[randomIndex]] = [messages[randomIndex], messages[index]];
+  }
+
+  return [INITIAL_LOADING_MESSAGE, ...messages];
+}
 
 interface MessageListProps {
   key?: string;
@@ -19,11 +65,27 @@ interface MessageListProps {
 
 export default function MessageList({ messages, isGenerating, onSelectSuggestion, onAskAIAboutManga }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const loadingMessages = useMemo(() => shuffleLoadingMessages(), [isGenerating]);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
 
   // Auto-scroll logic triggered when messages lengthen or generation status changes
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, isGenerating]);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setLoadingMessageIndex(0);
+      return;
+    }
+
+    setLoadingMessageIndex(0);
+    const interval = window.setInterval(() => {
+      setLoadingMessageIndex((currentIndex) => (currentIndex + 1) % loadingMessages.length);
+    }, 2200);
+
+    return () => window.clearInterval(interval);
+  }, [isGenerating, loadingMessages]);
 
   const isEmpty = messages.length === 0;
 
@@ -81,7 +143,7 @@ export default function MessageList({ messages, isGenerating, onSelectSuggestion
                   <span>●</span>
                   <span>●</span>
                   <span className="text-xs text-gray-500 font-semibold ml-1 capitalize tracking-wide">
-                    GPTSenpai is typing...
+                    {loadingMessages[loadingMessageIndex]}
                   </span>
                 </div>
               </div>
