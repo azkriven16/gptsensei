@@ -18,6 +18,7 @@ export interface Message {
   attachmentType?: string; // e.g., 'image/png' or 'text/plain'
   searchSources?: CodeSource[]; // real web search grounding search citations
   isError?: boolean;
+  provider?: 'gemini' | 'workers-ai';
 }
 
 export interface Chat {

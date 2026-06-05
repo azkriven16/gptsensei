@@ -41,7 +41,6 @@ async function startServer() {
   // Model Fallback chain helper to handle transient 503 limits dynamically
   const MODEL_FALLBACK_CHAIN = [
     "gemini-2.5-flash",
-    "gemini-3.5-flash",
     "gemini-2.0-flash",
     "gemini-2.5-flash-lite",
   ];
@@ -90,6 +89,53 @@ async function startServer() {
     throw lastError;
   }
 
+  // Workers AI REST API streaming (used when CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_AI_TOKEN are set in .env.local)
+  async function* streamWorkersAI(
+    accountId: string,
+    token: string,
+    messages: Array<{ role: string; content: string }>
+  ) {
+    console.log("[Workers AI] Streaming via REST API");
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ stream: true, messages }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Workers AI error ${response.status}: ${await response.text()}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("Workers AI response has no readable body.");
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === "data: [DONE]") continue;
+        if (trimmed.startsWith("data: ")) {
+          try {
+            const payload = JSON.parse(trimmed.slice(6));
+            if (payload.response) yield payload.response as string;
+          } catch {}
+        }
+      }
+    }
+  }
+
   // API entry points
   app.post("/api/chat", async (req, res) => {
     try {
@@ -104,6 +150,7 @@ async function startServer() {
 Your job is to help readers find media that genuinely fits their taste, mood, tolerance, and current obsession.
 Be warm, sharp, and concise. Avoid roleplay gimmicks, fake certainty, long intros, and generic hype.
 When recommending media, provide exactly 4 recommendations unless the user explicitly asks for a different count.
+IMPORTANT: Always format recommendations as a numbered list: 1. **Title** — each title must be a numbered item (1., 2., 3., 4.) with the title in bold (**Title**).
 For each recommendation, include the title, format/region if useful, genre or mood tags, a short premise, why it matches, and one honest caveat when relevant.
 If the user's request is vague, infer a reasonable reading mood and mention the assumption briefly.`;
 
@@ -135,6 +182,111 @@ If the user's request is vague, infer a reasonable reading mood and mention the 
         tools.push({ googleSearch: {} });
       }
 
+      const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+      const cfAiToken = process.env.CLOUDFLARE_AI_TOKEN;
+      const hasWorkersAI = Boolean(cfAccountId && cfAiToken);
+
+      const geminiKey = process.env.GEMINI_API_KEY;
+      const hasGemini = Boolean(geminiKey);
+
+      // Helpers to detect quota/location errors worth falling back from
+      const isGeminiFallbackable = (msg: string) =>
+        msg.includes("503") || msg.includes("unavailable") || msg.includes("high demand") ||
+        msg.includes("quota") || msg.includes("resource_exhausted") || msg.includes("429") ||
+        msg.includes("location") || msg.includes("failed_precondition") || msg.includes("rate");
+
+      if (stream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+
+        let usedFallback = false;
+
+        if (hasGemini) {
+          try {
+            const ai = getGeminiClient();
+            res.write(`data: ${JSON.stringify({ provider: "gemini" })}\n\n`);
+            let aiResponseStream;
+            try {
+              aiResponseStream = await generateContentStreamWithFallback(ai, {
+                contents: geminiContents,
+                config: {
+                  systemInstruction,
+                  tools: tools.length > 0 ? tools : undefined,
+                  temperature: 0.7,
+                  thinkingConfig: { thinkingBudget: 0 },
+                },
+              });
+            } catch (initErr: any) {
+              if (hasWorkersAI && isGeminiFallbackable(String(initErr.message || "").toLowerCase())) {
+                usedFallback = true;
+              } else {
+                res.write(`data: ${JSON.stringify({ error: initErr.message })}\n\n`);
+                res.write("data: [DONE]\n\n");
+                res.end();
+                return;
+              }
+            }
+
+            if (!usedFallback && aiResponseStream) {
+              const searchSources: any[] = [];
+              for await (const chunk of aiResponseStream) {
+                const text = chunk.text || "";
+                const chunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                if (chunks && Array.isArray(chunks)) {
+                  chunks.forEach((c: any) => {
+                    if (c.web && c.web.uri && c.web.title && !searchSources.some((s: any) => s.uri === c.web.uri)) {
+                      searchSources.push({ title: c.web.title, uri: c.web.uri });
+                    }
+                  });
+                }
+                res.write(`data: ${JSON.stringify({ text, searchSources: searchSources.length > 0 ? searchSources : undefined })}\n\n`);
+              }
+              res.write("data: [DONE]\n\n");
+              res.end();
+              return;
+            }
+          } catch (geminiErr: any) {
+            const lower = String(geminiErr.message || "").toLowerCase();
+            if (hasWorkersAI && isGeminiFallbackable(lower)) {
+              usedFallback = true;
+            } else {
+              res.write(`data: ${JSON.stringify({ error: geminiErr.message })}\n\n`);
+              res.write("data: [DONE]\n\n");
+              res.end();
+              return;
+            }
+          }
+        }
+
+        if (hasWorkersAI && (!hasGemini || usedFallback)) {
+          res.write(`data: ${JSON.stringify({ provider: "workers-ai" })}\n\n`);
+          const aiMessages = [
+            { role: "system", content: systemInstruction },
+            ...geminiContents.map((m: any) => ({
+              role: m.role === "model" ? "assistant" : "user",
+              content: m.parts.map((p: any) => p.text || "").join(""),
+            })),
+          ];
+          try {
+            for await (const chunk of streamWorkersAI(cfAccountId!, cfAiToken!, aiMessages)) {
+              res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+            }
+          } catch (err: any) {
+            res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+          }
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
+
+        res.write(`data: ${JSON.stringify({ error: "No AI backend is configured." })}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+        return;
+      }
+
+      // Non-stream path — Gemini first, Workers AI fallback
       const ai = getGeminiClient();
 
       // Handle stream chat response if requested by client
@@ -143,14 +295,24 @@ If the user's request is vague, infer a reasonable reading mood and mention the 
         res.setHeader("Cache-Control", "no-cache");
         res.setHeader("Connection", "keep-alive");
 
-        const aiResponseStream = await generateContentStreamWithFallback(ai, {
-          contents: geminiContents,
-          config: {
-            systemInstruction,
-            tools: tools.length > 0 ? tools : undefined,
-            temperature: 0.7,
-          },
-        });
+        let aiResponseStream;
+        try {
+          aiResponseStream = await generateContentStreamWithFallback(ai, {
+            contents: geminiContents,
+            config: {
+              systemInstruction,
+              tools: tools.length > 0 ? tools : undefined,
+              temperature: 0.7,
+              thinkingConfig: { thinkingBudget: 0 },
+            },
+          });
+        } catch (streamInitErr: any) {
+          const errMsg = streamInitErr.message || "All AI models are currently unavailable. Please try again later.";
+          res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
 
         const searchSources: any[] = [];
         for await (const chunk of aiResponseStream) {

@@ -26,6 +26,10 @@ function getAssistantErrorContent(error: any) {
     return `### Gemini location blocked\n\nGPT Senpai reached Gemini, but Gemini rejected the request from the deployed runtime location.\n\nOpen /api/health on the deployed site and check the Cloudflare location plus Gemini model lookup. If the model lookup also fails with this message, move the Gemini call to a supported backend region or use Vertex AI from a supported Google Cloud region.\n\nTechnical detail: ${detail}`;
   }
 
+  if (lowerDetail.includes('503') || lowerDetail.includes('unavailable') || lowerDetail.includes('high demand')) {
+    return `### AI models temporarily unavailable\n\nAll Gemini models are experiencing high demand right now. This is usually temporary — wait a moment and try again.\n\nTechnical detail: ${detail}`;
+  }
+
   if (lowerDetail.includes('rate') || lowerDetail.includes('quota') || lowerDetail.includes('429') || lowerDetail.includes('resource_exhausted')) {
     return `### Gemini limit reached\n\nGemini returned a quota or rate-limit error. Wait a moment, then retry, or switch the deployment to a Gemini key/project with quota for the configured model.\n\nTechnical detail: ${detail}`;
   }
@@ -450,9 +454,10 @@ export default function App() {
 
       let accumulatedContent = '';
       let accumulatedSources: any[] = [];
+      let accumulatedProvider: 'gemini' | 'workers-ai' | undefined;
       let buffer = '';
 
-      const updateAssistantMessage = (content: string, searchSources?: any[]) => {
+      const updateAssistantMessage = (content: string, searchSources?: any[], provider?: 'gemini' | 'workers-ai') => {
         setChats(prev => prev.map(chat => {
           if (chat.id === currentChatId) {
             return {
@@ -463,6 +468,7 @@ export default function App() {
                     ...m,
                     content,
                     searchSources: searchSources && searchSources.length > 0 ? searchSources : undefined,
+                    ...(provider ? { provider } : {}),
                   };
                 }
                 return m;
@@ -489,6 +495,9 @@ export default function App() {
           throw new Error(payload.error);
         }
 
+        if (payload.provider) {
+          accumulatedProvider = payload.provider;
+        }
         if (payload.text) {
           accumulatedContent += payload.text;
         }
@@ -496,7 +505,7 @@ export default function App() {
           accumulatedSources = payload.searchSources;
         }
 
-        updateAssistantMessage(accumulatedContent, accumulatedSources);
+        updateAssistantMessage(accumulatedContent, accumulatedSources, accumulatedProvider);
       };
 
       while (true) {

@@ -20,11 +20,12 @@ import {
   BookOpen
 } from 'lucide-react';
 import { Message, CodeSource } from '../types';
-import { getDisplayGenre } from '../utils/mediaLabels';
+import { getDisplayGenre, getMediaTypeLabel } from '../utils/mediaLabels';
 
 interface MessageItemProps {
   message: Message;
   isLatest: boolean;
+  loadingLabel?: string;
   onAskAIAboutManga?: (mangaTitle: string) => void;
   key?: any;
 }
@@ -44,6 +45,7 @@ const fetchAniListInfo = async (title: string) => {
         }
         siteUrl
         format
+        countryOfOrigin
         genres
         averageScore
       }
@@ -68,6 +70,7 @@ const fetchAniListInfo = async (title: string) => {
         coverImage: media?.coverImage?.large || null,
         siteUrl: media?.siteUrl || null,
         format: media?.format || null,
+        countryOfOrigin: media?.countryOfOrigin || null,
         genres: media?.genres || [],
         score: media?.averageScore || null,
       };
@@ -75,7 +78,7 @@ const fetchAniListInfo = async (title: string) => {
   } catch (err) {
     console.warn('Failed to fetch AniList info inside chat for:', title, err);
   }
-  return { coverImage: null, siteUrl: null, format: null, genres: [], score: null };
+  return { coverImage: null, siteUrl: null, format: null, countryOfOrigin: null, genres: [], score: null };
 };
 
 function MangaImage({ src, alt }: { src: string; alt: string }) {
@@ -107,7 +110,7 @@ function MangaImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export default function MessageItem({ message, isLatest, onAskAIAboutManga }: MessageItemProps) {
+export default function MessageItem({ message, isLatest, loadingLabel, onAskAIAboutManga }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [thumbs, setThumbs] = useState<'up' | 'down' | null>(null);
@@ -118,6 +121,7 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
     coverImage: string | null;
     siteUrl: string | null;
     format?: string;
+    countryOfOrigin?: string;
     genres?: string[];
     score?: number;
   }[]>([]);
@@ -125,6 +129,7 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
   const [detectedTitles, setDetectedTitles] = useState<string[]>([]);
 
   const isUser = message.role === 'user';
+  const isInlineLoading = !isUser && !message.content.trim() && Boolean(loadingLabel);
 
   const renderMangaDeck = (isBottom = false) => {
     if (isUser) return null;
@@ -207,11 +212,9 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
                     <div className="flex-grow flex items-end">
                       <div className="flex items-center justify-between w-full gap-2 select-none">
                         <div className="flex items-center gap-2">
-                          {manga.format && (
-                            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide">
-                              {manga.format}
-                            </span>
-                          )}
+                          <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide">
+                            {getMediaTypeLabel(manga.format, manga.countryOfOrigin)}
+                          </span>
                           {manga.score && (
                             <span className="text-[9px] font-bold text-amber-500">
                               ★ {manga.score}%
@@ -269,25 +272,29 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
     }
     if (!message.content) return;
 
+    const noiseWords = ['author', 'synopsis', 'genre', 'genres', 'premise', 'insight', 'otaku', 'match pitch', 'pitch', 'what people say', 'what community says', 'caveat', 'why it', 'format', 'mood tag'];
     const lines = message.content.split('\n');
     const parsed: string[] = [];
     for (let line of lines) {
       line = line.trim();
-      let cleanedLine = line.replace(/^[^\w\s\*\d]+/g, '').trim(); 
-      const listMatch = cleanedLine.match(/^(\d+)\.\s+(\*\*|)([^*:(\-\n]+)/);
-      if (listMatch) {
-        let title = listMatch[3].trim();
-        title = title.replace(/\*\*$/, '').trim();
-        title = title.replace(/[:\-\(]$/, '').trim();
-        
-        const noiseWords = ['author', 'synopsis', 'genre', 'genres', 'premise', 'insight', 'otaku', 'match pitch', 'pitch', 'what people say', 'what community says'];
-        const isNoise = noiseWords.some(word => title.toLowerCase().includes(word));
+      let cleanedLine = line.replace(/^[^\w\s\*\d]+/g, '').trim().replace(/^[\*\-]\s+/, '').trim();
+      let title = '';
 
-        if (title && title.length > 1 && title.length < 60 && !isNoise) {
-          if (!parsed.includes(title)) {
-            parsed.push(title);
-          }
+      const numberedMatch = cleanedLine.match(/^(\d+)\.\s+(\*\*|)([^*:(\-\n]+)/);
+      if (numberedMatch) {
+        title = numberedMatch[3].trim().replace(/\*\*$/, '').replace(/[:\-\(]$/, '').trim();
+      } else {
+        // Fallback: bold title on a bullet line — **Title** ...
+        const boldMatch = cleanedLine.match(/^\*\*([^*]+?)\*\*/);
+        if (boldMatch) {
+          title = boldMatch[1].replace(/\s*\(.*?\)\s*$/, '').replace(/[:\-]$/, '').trim();
         }
+      }
+
+      if (!title) continue;
+      const isNoise = noiseWords.some(word => title.toLowerCase().includes(word));
+      if (title.length > 1 && title.length < 60 && !isNoise && !parsed.includes(title)) {
+        parsed.push(title);
       }
     }
     
@@ -314,24 +321,26 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
     const lines = message.content.split('\n');
     const parsedTitles: string[] = [];
 
+    const noiseWords = ['author', 'synopsis', 'genre', 'genres', 'premise', 'insight', 'otaku', 'match pitch', 'pitch', 'what people say', 'what community says', 'caveat', 'why it', 'format', 'mood tag'];
     for (let line of lines) {
       line = line.trim();
-      let cleanedLine = line.replace(/^[^\w\s\*\d]+/g, '').trim(); 
-      
-      const listMatch = cleanedLine.match(/^(\d+)\.\s+(\*\*|)([^*:(\-\n]+)/);
-      if (listMatch) {
-         let title = listMatch[3].trim();
-         title = title.replace(/\*\*$/, '').trim();
-         title = title.replace(/[:\-\(]$/, '').trim();
-         
-         const noiseWords = ['author', 'synopsis', 'genre', 'genres', 'premise', 'insight', 'otaku', 'match pitch', 'pitch', 'what people say', 'what community says'];
-         const isNoise = noiseWords.some(word => title.toLowerCase().includes(word));
+      let cleanedLine = line.replace(/^[^\w\s\*\d]+/g, '').trim().replace(/^[\*\-]\s+/, '').trim();
+      let title = '';
 
-         if (title && title.length > 1 && title.length < 60 && !isNoise) {
-           if (!parsedTitles.includes(title)) {
-             parsedTitles.push(title);
-           }
-         }
+      const numberedMatch = cleanedLine.match(/^(\d+)\.\s+(\*\*|)([^*:(\-\n]+)/);
+      if (numberedMatch) {
+        title = numberedMatch[3].trim().replace(/\*\*$/, '').replace(/[:\-\(]$/, '').trim();
+      } else {
+        const boldMatch = cleanedLine.match(/^\*\*([^*]+?)\*\*/);
+        if (boldMatch) {
+          title = boldMatch[1].replace(/\s*\(.*?\)\s*$/, '').replace(/[:\-]$/, '').trim();
+        }
+      }
+
+      if (!title) continue;
+      const isNoise = noiseWords.some(word => title.toLowerCase().includes(word));
+      if (title.length > 1 && title.length < 60 && !isNoise && !parsedTitles.includes(title)) {
+        parsedTitles.push(title);
       }
     }
 
@@ -354,6 +363,7 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
             coverImage: aniInfo.coverImage,
             siteUrl: aniInfo.siteUrl,
             format: aniInfo.format || undefined,
+            countryOfOrigin: aniInfo.countryOfOrigin || undefined,
             genres: aniInfo.genres || undefined,
             score: aniInfo.score || undefined,
           };
@@ -600,10 +610,22 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
             {/* Render dynamic background-enriched AniList manga cards deck at the top */}
             {renderMangaDeck(false)}
 
-            {/* Render parsed markdown text */}
-            <div className="prose prose-invert prose-sm max-w-none">
-              {parseMarkdown(message.content)}
-            </div>
+            {isInlineLoading ? (
+              <div className="flex min-h-[24px] items-center gap-2 text-gray-400">
+                <div className="flex items-center gap-1.5 text-sm typing-dots">
+                  <span>●</span>
+                  <span>●</span>
+                  <span>●</span>
+                </div>
+                <span className="text-xs font-semibold tracking-wide text-gray-500">
+                  {loadingLabel}
+                </span>
+              </div>
+            ) : (
+              <div className="prose prose-invert prose-sm max-w-none">
+                {parseMarkdown(message.content)}
+              </div>
+            )}
 
             {/* Render dynamic background-enriched AniList manga cards deck at the bottom as well */}
             {renderMangaDeck(true)}
@@ -641,7 +663,7 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
           </div>
 
           {/* Actions Bar displayed for bot responses, or hover trigger */}
-          {!isUser && (
+          {!isUser && !isInlineLoading && (
             <div className="mt-4 flex items-center gap-2 text-white/40 opacity-100 group-hover/item:opacity-100 sm:opacity-50 transition-opacity duration-200">
               {/* Copy action */}
               <button
@@ -683,6 +705,18 @@ export default function MessageItem({ message, isLatest, onAskAIAboutManga }: Me
                 <ThumbsDown className="w-3.5 h-3.5" />
               </button>
 
+              {message.provider === 'workers-ai' && (
+                <span className="flex items-center gap-1 ml-2 text-[10px] font-semibold text-amber-400/80 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full" title="Gemini limit reached — responded via Cloudflare Workers AI">
+                  <span>⚡</span>
+                  <span>Workers AI</span>
+                </span>
+              )}
+              {message.provider === 'gemini' && (
+                <span className="flex items-center gap-1 ml-2 text-[10px] font-semibold text-[#10a37f]/70 bg-[#10a37f]/10 border border-[#10a37f]/20 px-2 py-0.5 rounded-full">
+                  <span>✦</span>
+                  <span>Gemini</span>
+                </span>
+              )}
               {message.isError && (
                 <span className="text-xs text-rose-400 font-medium ml-2">
                   Key required / Server failure

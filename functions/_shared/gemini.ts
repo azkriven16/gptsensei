@@ -15,9 +15,9 @@ type GeminiClient = GoogleGenAI | GeminiProxyClient;
 
 export const MODEL_FALLBACK_CHAIN = [
   "gemini-2.5-flash",
-  "gemini-3.5-flash",
   "gemini-2.0-flash",
   "gemini-2.5-flash-lite",
+  "gemini-1.5-flash",
 ];
 
 function describeGeminiError(error: any, modelName: string) {
