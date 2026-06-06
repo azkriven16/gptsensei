@@ -4,17 +4,18 @@
  */
 
 import React, { useState } from 'react';
-import { 
-  Plus, 
-  MessageSquare, 
-  Trash2, 
-  Settings, 
-  Edit3, 
-  Check, 
-  X, 
-  PanelLeftClose, 
+import {
+  Plus,
+  MessageSquare,
+  Trash2,
+  Settings,
+  Edit3,
+  Check,
+  X,
+  PanelLeftClose,
   Sparkles,
-  BookOpen
+  BookOpen,
+  LogOut
 } from 'lucide-react';
 import { Chat } from '../types';
 import MangaExplorer from './MangaExplorer';
@@ -30,7 +31,9 @@ interface SidebarProps {
   isSidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   userEmail?: string;
+  userName?: string;
   onOpenSettings: () => void;
+  onLogout: () => void;
   onAskAIAboutManga: (mangaTitle: string) => void;
   sidebarRight?: boolean;
 }
@@ -45,8 +48,10 @@ export default function Sidebar({
   onClearHistory,
   isSidebarOpen,
   setSidebarOpen,
-  userEmail = 'azkriven16@gmail.com',
+  userEmail,
+  userName,
   onOpenSettings,
+  onLogout,
   onAskAIAboutManga,
   sidebarRight = false,
 }: SidebarProps) {
@@ -182,8 +187,9 @@ export default function Sidebar({
         {/* Header Title and Collapse Button */}
         <div className="flex items-center justify-between gap-2 pb-1.5 flex-shrink-0">
           <div className="flex items-center gap-2 px-1">
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#10a37f] bg-[#10a37f]/10 border border-[#10a37f]/20 px-2 py-0.5 rounded-md">
-              Manga Hub
+            <Sparkles className="w-4 h-4 text-[#10a37f]" />
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#10a37f]">
+              GPTSenpai
             </span>
           </div>
           <button
@@ -345,25 +351,36 @@ export default function Sidebar({
         <div id="user-footer-capsule" className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-[#2f2f2f] transition-all duration-150 text-white cursor-pointer">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs select-none shadow-sm flex-shrink-0">
-              {userEmail.slice(0, 2).toUpperCase()}
+              {(userName || userEmail || 'G').slice(0, 2).toUpperCase()}
             </div>
             <div className="text-left leading-tight min-w-0">
-              <div className="text-xs font-semibold text-white/90 truncate">azkriven</div>
-              <div className="text-[10px] text-white/40 truncate">{userEmail}</div>
+              <div className="text-xs font-semibold text-white/90 truncate">
+                {userName || (userEmail ? userEmail.split('@')[0] : 'Guest')}
+              </div>
+              <div className="text-[10px] text-white/40 truncate">
+                {userEmail || 'Anonymous session'}
+              </div>
             </div>
           </div>
-          
-          <button
-            id="sidebar-settings-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenSettings();
-            }}
-            className="p-1.5 hover:bg-[#3e3e3e] rounded-md text-white/40 hover:text-white transition-colors cursor-pointer"
-            title="Settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
+
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              id="sidebar-settings-btn"
+              onClick={(e) => { e.stopPropagation(); onOpenSettings(); }}
+              className="p-1.5 hover:bg-[#3e3e3e] rounded-md text-white/40 hover:text-white transition-colors cursor-pointer"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button
+              id="sidebar-logout-btn"
+              onClick={(e) => { e.stopPropagation(); onLogout(); }}
+              className="p-1.5 hover:bg-[#3e3e3e] rounded-md text-white/40 hover:text-rose-400 transition-colors cursor-pointer"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

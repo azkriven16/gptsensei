@@ -1,10 +1,35 @@
 import {
   Env,
+  KVNamespace,
   generateContentStreamWithFallback,
   generateContentWithFallback,
   getGeminiClient,
   jsonResponse,
 } from "../_shared/gemini";
+
+const ANON_MESSAGE_LIMIT = 5;
+
+function decodeJwtPayload(jwt: string): Record<string, any> | null {
+  try {
+    const payload = jwt.split('.')[1];
+    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {
+    return null;
+  }
+}
+
+async function checkAnonLimit(
+  kv: KVNamespace,
+  userId: string,
+): Promise<{ blocked: boolean; count: number }> {
+  const count = parseInt((await kv.get(`anon:${userId}`)) || '0');
+  return { blocked: count >= ANON_MESSAGE_LIMIT, count };
+}
+
+async function incrementAnonCount(kv: KVNamespace, userId: string): Promise<void> {
+  const count = parseInt((await kv.get(`anon:${userId}`)) || '0');
+  await kv.put(`anon:${userId}`, String(count + 1));
+}
 
 const systemInstruction = `You are GPT Senpai, a manga, manhwa, manhua, and webtoon recommendation assistant.
 Your job is to help readers find media that genuinely fits their taste, mood, tolerance, and current obsession.
@@ -16,6 +41,26 @@ If the user's request is vague, infer a reasonable reading mood and mention the 
 
 export const onRequestPost = async ({ request, env }: { request: Request; env: Env }) => {
   try {
+    // Rate limit anonymous users
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const claims = token ? decodeJwtPayload(token) : null;
+    const isAnon = claims?.is_anonymous === true;
+    const userId: string | undefined = claims?.sub;
+
+    if (isAnon && userId && env.RATE_LIMIT) {
+      const { blocked, count } = await checkAnonLimit(env.RATE_LIMIT, userId);
+      if (blocked) {
+        return jsonResponse({
+          error: `You've used all ${ANON_MESSAGE_LIMIT} free messages. Sign in with your email to keep chatting.`,
+          limitReached: true,
+          count,
+          limit: ANON_MESSAGE_LIMIT,
+        }, 429);
+      }
+      await incrementAnonCount(env.RATE_LIMIT, userId);
+    }
+
     const { messages, webSearch, stream } = await request.json() as any;
 
     if (!messages || !Array.isArray(messages)) {

@@ -4,3 +4,7 @@ pages_build_output_dir = "dist"
 
 [placement]
 mode = "smart"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "435cede5e9c942f2b7aea2ac62c09a1b"

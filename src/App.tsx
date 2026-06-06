@@ -4,7 +4,10 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, PanelLeft, PanelRight, Palette } from 'lucide-react';
+import { supabase } from './lib/supabase';
+import { useAuth } from './hooks/useAuth';
 import Sidebar from './components/Sidebar';
 import MessageList from './components/MessageList';
 import ChatInput from './components/ChatInput';
@@ -42,6 +45,14 @@ function getAssistantErrorContent(error: any) {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    navigate('/', { replace: true });
+  }
+
   // Sync core chat states from LocalStorage for seamless sessions caching
   const [chats, setChats] = useState<Chat[]>(() => {
     const cached = localStorage.getItem('gptsenpai_clone_chats');
@@ -400,6 +411,14 @@ export default function App() {
     setIsGenerating(true);
 
     try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const authHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (currentSession?.access_token) {
+        authHeaders['Authorization'] = `Bearer ${currentSession.access_token}`;
+      }
+
       // Assemble full payload to forward to the secure node endpoint
       const proxyPayload = updatedMessages.map(m => ({
         role: m.role,
@@ -416,9 +435,7 @@ export default function App() {
 
       const apiResponse = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: authHeaders,
         body: JSON.stringify({
           ...requestPayload,
           stream: true,
@@ -528,9 +545,7 @@ export default function App() {
       if (!accumulatedContent.trim()) {
         const retryResponse = await fetch('/api/chat', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: authHeaders,
           body: JSON.stringify({
             ...requestPayload,
             stream: false,
@@ -638,7 +653,10 @@ export default function App() {
         onClearHistory={handleClearHistory}
         isSidebarOpen={isSidebarOpen}
         setSidebarOpen={setSidebarOpen}
+        userEmail={user?.email}
+        userName={user?.user_metadata?.full_name || user?.user_metadata?.name}
         onOpenSettings={() => setSettingsOpen(true)}
+        onLogout={handleLogout}
         onAskAIAboutManga={handleAskAIAboutManga}
         sidebarRight={designSettings.sidebarRight}
       />

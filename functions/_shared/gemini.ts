@@ -1,9 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 
+export interface KVNamespace {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+}
+
 export interface Env {
   GEMINI_API_KEY?: string;
   GEMINI_PROXY_URL?: string;
   GEMINI_PROXY_TOKEN?: string;
+  RATE_LIMIT?: KVNamespace;
 }
 
 type GeminiProxyClient = {
