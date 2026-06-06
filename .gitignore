@@ -3,6 +3,7 @@ build/
 dist/
 coverage/
 skill-observations/
+.wrangler/
 .DS_Store
 *.log
 .env*

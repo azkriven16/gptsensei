@@ -88,6 +88,12 @@ export default function MessageList({ messages, isGenerating, onSelectSuggestion
   }, [isGenerating, loadingMessages]);
 
   const isEmpty = messages.length === 0;
+  const latestMessage = messages[messages.length - 1];
+  const latestAssistantIsLoading = Boolean(
+    isGenerating &&
+    latestMessage?.role === 'assistant' &&
+    !latestMessage.content.trim()
+  );
 
   if (isEmpty) {
     return (
@@ -124,12 +130,17 @@ export default function MessageList({ messages, isGenerating, onSelectSuggestion
             key={message.id} 
             message={message} 
             isLatest={messages[messages.length - 1].id === message.id}
+            loadingLabel={
+              latestAssistantIsLoading && messages[messages.length - 1].id === message.id
+                ? loadingMessages[loadingMessageIndex]
+                : undefined
+            }
             onAskAIAboutManga={onAskAIAboutManga}
           />
         ))}
 
         {/* Sub-block displaying the active generation typing status bubble */}
-        {isGenerating && (
+        {isGenerating && !latestAssistantIsLoading && (
           <div id="ai-typing-status-indicator" className="py-6 px-4 w-full bg-[#212121]/30 border-b border-[#2a2a2a]/20 animate-pulse">
             <div className="max-w-[720px] mx-auto flex items-start gap-4">
               <div className="flex-shrink-0">

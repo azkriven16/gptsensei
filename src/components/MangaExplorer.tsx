@@ -26,7 +26,7 @@ import {
   Grid2X2,
   List
 } from 'lucide-react';
-import { getDisplayGenre } from '../utils/mediaLabels';
+import { getDisplayGenre, getMediaTypeLabel } from '../utils/mediaLabels';
 
 interface Title {
   english: string | null;
@@ -45,6 +45,7 @@ interface Manga {
   title: Title;
   type: string;
   format: string;
+  countryOfOrigin: string | null;
   status: string;
   chapters: number | null;
   volumes: number | null;
@@ -239,6 +240,7 @@ export default function MangaExplorer({ onAskAIAboutManga, onClose }: MangaExplo
             }
             type
             format
+            countryOfOrigin
             status
             chapters
             volumes
@@ -720,7 +722,7 @@ export default function MangaExplorer({ onAskAIAboutManga, onClose }: MangaExplo
                         {displayTitle}
                       </h4>
                       <div className="flex items-center gap-1 text-[9px] text-gray-400 font-medium mt-1 min-w-0">
-                        <span className="text-amber-500/90 font-semibold">{manga.format}</span>
+                        <span className="text-amber-500/90 font-semibold">{getMediaTypeLabel(manga.format, manga.countryOfOrigin)}</span>
                         <span>•</span>
                         <span className="capitalize truncate">{manga.status.replace(/_/g, ' ').toLowerCase()}</span>
                       </div>
@@ -796,7 +798,7 @@ export default function MangaExplorer({ onAskAIAboutManga, onClose }: MangaExplo
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[11px]">
                     <div className="text-gray-400">Chapters: <span className="text-white font-semibold">{selectedManga.chapters || 'TBA'}</span></div>
                     <div className="text-gray-400">Status: <span className="text-white capitalize font-semibold">{selectedManga.status.replace(/_/g, ' ').toLowerCase()}</span></div>
-                    <div className="text-gray-400">Format: <span className="text-[#10a37f] font-bold">{selectedManga.format}</span></div>
+                    <div className="text-gray-400">Format: <span className="text-[#10a37f] font-bold">{getMediaTypeLabel(selectedManga.format, selectedManga.countryOfOrigin)}</span></div>
                     <div className="text-gray-400 flex items-center gap-1">
                       Score: 
                       {selectedManga.averageScore ? (
